@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 英语短文语境阅读</title>
+    <meta name="description" content="使用AI生成英语短文，在语境中学习词汇">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: { 50: '#f0f9ff', 100: '#e0f2fe', 200: '#bae6fd', 300: '#7dd3fc', 400: '#38bdf8', 500: '#0ea5e9', 600: '#0284c7', 700: '#0369a1', 800: '#075985', 900: '#0c4a6e' },
+                        accent: { 50: '#fdf4ff', 100: '#fae8ff', 200: '#f5d0fe', 300: '#f0abfc', 400: '#e879f9', 500: '#d946ef', 600: '#c026d3', 700: '#a21caf', 800: '#86198f', 900: '#701a75' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        * { font-family: 'Inter', sans-serif; }
+        body { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%); min-height: 100vh; }
+        .glass { background: rgba(255,255,255,0.08); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.15); }
+        .glass-light { background: rgba(255,255,255,0.12); }
+        .glow { box-shadow: 0 0 30px rgba(139,92,246,0.3); }
+        .btn-glow:hover { box-shadow: 0 0 25px rgba(139,92,246,0.5); transform: translateY(-2px); }
+        .word-tag { transition: all 0.2s; }
+        .word-tag:hover { transform: scale(1.05); }
+        .word-tag.selected { background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white; }
+        .fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .typing { border-right: 2px solid #8b5cf6; animation: blink 1s infinite; }
+        @keyframes blink { 0%, 50% { border-color: #8b5cf6; } 51%, 100% { border-color: transparent; } }
+        .article-content { line-height: 2; letter-spacing: 0.02em; }
+        .highlight-word { background: linear-gradient(135deg, rgba(139,92,246,0.3), rgba(236,72,153,0.3)); padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+        ::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.5); border-radius: 4px; }
+        .collection-card { transition: all 0.3s; }
+        .collection-card:hover { transform: translateX(5px); background: rgba(255,255,255,0.15); }
+        /* 下拉菜单选项样式 */
+        select option { background: #1e1b4b; color: white; padding: 8px; }
+        select { color: white; }
+    </style>
+</head>
+<body class="text-white">
+    <nav class="glass sticky top-0 z-50 px-6 py-4">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-xl">📚</div>
+                <h1 class="text-xl font-bold bg-gradient-to-r from-violet-400 to-pink-400 bg-clip-text text-transparent">AI 英语语境阅读</h1>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="showDevModal()" class="px-4 py-2 rounded-lg glass hover:glass-light transition-all text-sm">登录</button>
+                <button onclick="showDevModal()" class="px-4 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-500 hover:to-pink-500 transition-all text-sm btn-glow">注册</button>
+            </div>
+        </div>
+    </nav>
+    <main class="max-w-7xl mx-auto px-6 py-8">
+        <div class="grid lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-1 space-y-6">
+                <section class="glass rounded-2xl overflow-hidden">
+                    <button onclick="toggleApiConfig()" class="w-full p-4 flex items-center justify-between hover:bg-white/5 transition-all">
+                        <div class="flex items-center gap-2">
+                            <span class="text-2xl">⚙️</span>
+                            <span class="font-semibold">API 配置</span>
+                            <span id="apiStatus" class="text-xs px-2 py-0.5 bg-yellow-600/50 rounded-full">未配置</span>
+                        </div>
+                        <span id="apiToggleIcon" class="text-gray-400 transition-transform">▼</span>
+                    </button>
+                    <div id="apiConfigPanel" class="hidden px-6 pb-6 space-y-4 fade-in">
+                        <div>
+                            <label class="block text-sm text-gray-300 mb-2">选择模型提供商</label>
+                            <select id="providerSelect" onchange="onProviderChange()" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 focus:outline-none focus:border-violet-500 transition-all">
+                                <option value="siliconflow">硅基流动 (SiliconCloud)</option>
+                                <option value="dashscope">通义千问 (DashScope)</option>
+                                <option value="deepseek">深度求索 (DeepSeek)</option>
+                                <option value="custom">自定义</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-300 mb-2">API 地址</label>
+                            <input type="text" id="apiUrl" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 focus:outline-none focus:border-violet-500 transition-all text-sm" placeholder="API endpoint URL">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-300 mb-2">模型名称</label>
+                            <select id="modelSelect" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 focus:outline-none focus:border-violet-500 transition-all"></select>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-300 mb-2">API Key</label>
+                            <input type="password" id="apiKey" oninput="updateApiStatus()" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 focus:outline-none focus:border-violet-500 transition-all" placeholder="输入您的 API Key">
+                        </div>
+                    </div>
+                </section>
+                <section class="glass rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center gap-2"><span class="text-2xl">📖</span> 词汇选择</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm text-gray-300 mb-2">词汇书</label>
+                            <select id="vocabBook" onchange="loadVocabulary()" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 focus:outline-none focus:border-violet-500 transition-all">
+                                <option value="CET4_T.json">四级核心词汇</option>
+                                <option value="CET6_T.json">六级核心词汇</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-300 mb-2">随机词汇数量</label>
+                            <select id="wordCountSelect" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 focus:outline-none focus:border-violet-500 transition-all">
+                                <option value="3">3 个词汇</option>
+                                <option value="5" selected>5 个词汇</option>
+                                <option value="7">7 个词汇</option>
+                                <option value="10">10 个词汇</option>
+                            </select>
+                        </div>
+                        <button onclick="randomSelectWords()" id="randomBtn" class="w-full py-3 rounded-xl bg-gradient-to-r from-pink-600 to-violet-600 hover:from-pink-500 hover:to-violet-500 transition-all font-semibold btn-glow flex items-center justify-center gap-2">
+                            <span>🎲</span> AI 随机选词
+                        </button>
+                        <div>
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="text-sm text-gray-300">已选词汇 (<span id="selectedCount">0</span>)</label>
+                                <button onclick="clearSelectedWords()" class="text-xs text-red-400 hover:text-red-300">清空</button>
+                            </div>
+                            <div id="selectedWords" class="flex flex-wrap gap-2 min-h-[80px] p-3 bg-white/5 rounded-xl border border-white/10">
+                                <p class="text-gray-400 text-sm">点击上方按钮随机选词</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+            <div class="lg:col-span-2 space-y-6">
+                <section class="glass rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center gap-2"><span class="text-2xl">✨</span> 短文生成</h2>
+                    <div class="grid md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm text-gray-300 mb-2">文章类型</label>
+                            <select id="articleType" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 focus:outline-none focus:border-violet-500 transition-all">
+                                <option value="story">故事叙述</option>
+                                <option value="news">新闻报道</option>
+                                <option value="essay">议论文</option>
+                                <option value="dialog">对话场景</option>
+                                <option value="letter">书信邮件</option>
+                                <option value="random">AI自选</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-300 mb-2">字数要求</label>
+                            <select id="wordCount" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 focus:outline-none focus:border-violet-500 transition-all">
+                                <option value="100">约100词</option>
+                                <option value="200" selected>约200词</option>
+                                <option value="300">约300词</option>
+                                <option value="500">约500词</option>
+                                <option value="random">AI自选</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-sm text-gray-300">提示词模板</label>
+                            <button onclick="toggleCustomPrompt()" class="text-xs text-violet-400 hover:text-violet-300">自定义</button>
+                        </div>
+                        <select id="promptTemplate" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 focus:outline-none focus:border-violet-500 transition-all">
+                            <option value="default">默认模板 - 自然融入词汇</option>
+                            <option value="highlight">高亮模板 - 标注目标词汇</option>
+                            <option value="explain">解释模板 - 附带词汇释义</option>
+                        </select>
+                    </div>
+                    <div id="customPromptArea" class="hidden mb-4">
+                        <label class="block text-sm text-gray-300 mb-2">自定义提示词</label>
+                        <textarea id="customPrompt" rows="4" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 focus:outline-none focus:border-violet-500 transition-all text-sm" placeholder="请根据以下词汇生成英语短文...&#10;使用 {words} 代表选中的词汇&#10;使用 {type} 代表文章类型&#10;使用 {count} 代表字数"></textarea>
+                    </div>
+                    <button onclick="generateArticle()" id="generateBtn" class="w-full py-4 rounded-xl bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-500 hover:to-pink-500 transition-all font-semibold text-lg btn-glow flex items-center justify-center gap-2">
+                        <span>🚀</span> 生成短文
+                    </button>
+                </section>
+                <section id="resultSection" class="glass rounded-2xl p-6 hidden fade-in">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold flex items-center gap-2"><span class="text-2xl">📄</span> 生成结果</h2>
+                        <div class="flex gap-2">
+                            <button onclick="saveToCollection()" class="px-4 py-2 bg-green-600/50 rounded-lg text-sm hover:bg-green-600 transition-all flex items-center gap-1">💾 收藏</button>
+                            <button onclick="downloadArticle()" class="px-4 py-2 bg-blue-600/50 rounded-lg text-sm hover:bg-blue-600 transition-all flex items-center gap-1">📥 下载</button>
+                        </div>
+                    </div>
+                    <div id="articleResult" class="article-content text-gray-200 bg-white/5 rounded-xl p-6 leading-relaxed"></div>
+                    <div id="usedWords" class="mt-4 pt-4 border-t border-white/10">
+                        <p class="text-sm text-gray-400 mb-2">使用的目标词汇：</p>
+                        <div id="usedWordsList" class="flex flex-wrap gap-2"></div>
+                    </div>
+                </section>
+                <section class="glass rounded-2xl p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold flex items-center gap-2"><span class="text-2xl">⭐</span> 我的收藏</h2>
+                        <button onclick="clearAllCollections()" class="text-xs text-red-400 hover:text-red-300">清空全部</button>
+                    </div>
+                    <div id="collectionList" class="space-y-3 max-h-[400px] overflow-y-auto">
+                        <p class="text-gray-400 text-sm text-center py-8">暂无收藏内容</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+    <div id="devModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+        <div class="glass rounded-2xl p-8 max-w-sm text-center fade-in">
+            <div class="text-6xl mb-4">🚧</div>
+            <h3 class="text-xl font-semibold mb-2">功能开发中</h3>
+            <p class="text-gray-300 mb-6">用户系统正在紧张开发中，敬请期待！</p>
+            <button onclick="hideDevModal()" class="px-6 py-2 bg-violet-600 rounded-xl hover:bg-violet-500 transition-all">知道了</button>
+        </div>
+    </div>
+    <script>
+    /**
+     * ============================================
+     * 词汇书配置 - 如何添加新词库
+     * ============================================
+     * 1. 将词库 JSON 文件上传到网站根目录
+     * 2. JSON 格式应为: [{"name": "单词", "trans": ["释义1", "释义2"]}, ...]
+     * 3. 在下方 VOCAB_FILES 中添加配置
+     * 4. 在 HTML 的 vocabBook 下拉菜单中添加对应选项
+     */
+    const VOCAB_FILES = {
+        'CET4_T.json': { name: '四级核心词汇', file: 'CET4_T.json' },
+        'CET6_T.json': { name: '六级核心词汇', file: 'CET6_T.json' }
+    };
+
+    const PROVIDERS = {
+        siliconflow: { name: '硅基流动', url: 'https://api.siliconflow.cn/v1/chat/completions', models: [{ id: 'Qwen/Qwen2.5-7B-Instruct', name: 'Qwen2.5-7B-Instruct' }, { id: 'Qwen/Qwen2.5-72B-Instruct', name: 'Qwen2.5-72B-Instruct' }, { id: 'deepseek-ai/DeepSeek-V2.5', name: 'DeepSeek-V2.5' }, { id: 'THUDM/glm-4-9b-chat', name: 'GLM-4-9B' }] },
+        dashscope: { name: '通义千问', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', models: [{ id: 'qwen-turbo', name: 'Qwen-Turbo' }, { id: 'qwen-plus', name: 'Qwen-Plus' }, { id: 'qwen-max', name: 'Qwen-Max' }] },
+        deepseek: { name: '深度求索', url: 'https://api.deepseek.com/v1/chat/completions', models: [{ id: 'deepseek-chat', name: 'DeepSeek-Chat' }, { id: 'deepseek-coder', name: 'DeepSeek-Coder' }] },
+        custom: { name: '自定义', url: '', models: [{ id: 'custom', name: '自定义模型' }] }
+    };
+
+    const PROMPT_TEMPLATES = {
+        default: `Please write an English {type} of approximately {count} words. Naturally incorporate the following vocabulary words into the text: {words}. Make sure the context helps readers understand the meaning of each word. The article should be engaging and easy to follow.`,
+        highlight: `Please write an English {type} of approximately {count} words using these vocabulary words: {words}. Mark each target vocabulary word by wrapping it with double asterisks like **word**. Ensure the context clearly demonstrates the meaning of each word.`,
+        explain: `Please write an English {type} of approximately {count} words. Include these vocabulary words: {words}. After the main text, provide a "Vocabulary Guide" section that lists each target word with its meaning and how it was used in the article.`
+    };
+
+    // 状态变量
+    let currentVocabList = [];  // 当前词库中的所有单词
+    let selectedWords = [];     // 被选中的单词
+    let currentArticle = '';
+    let collections = JSON.parse(localStorage.getItem('ai_reader_collections') || '[]');
+
+    // 初始化
+    document.addEventListener('DOMContentLoaded', () => {
+        onProviderChange();
+        loadVocabulary();
+        renderCollections();
+    });
+
+    // 加载词库 JSON 文件
+    async function loadVocabulary() {
+        const vocabFile = document.getElementById('vocabBook').value;
+        const btn = document.getElementById('randomBtn');
+        
+        try {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="typing">加载词库中...</span>';
+            
+            const response = await fetch(vocabFile);
+            if (!response.ok) throw new Error('词库文件加载失败');
+            
+            const data = await response.json();
+            // 从 JSON 中提取单词名称
+            currentVocabList = data.map(item => item.name);
+            
+            btn.disabled = false;
+            btn.innerHTML = '<span>🎲</span> AI 随机选词';
+            
+            // 清空之前的选择
+            selectedWords = [];
+            updateSelectedWords();
+            
+            console.log(`已加载 ${currentVocabList.length} 个词汇`);
+        } catch (error) {
+            console.error('加载词库失败:', error);
+            btn.innerHTML = '<span>❌</span> 加载失败，点击重试';
+            btn.disabled = false;
+            currentVocabList = [];
+        }
+    }
+
+    // AI 随机选词
+    function randomSelectWords() {
+        if (currentVocabList.length === 0) {
+            alert('词库尚未加载，请稍候或尝试刷新页面');
+            return;
+        }
+        
+        const count = parseInt(document.getElementById('wordCountSelect').value);
+        const shuffled = [...currentVocabList].sort(() => Math.random() - 0.5);
+        selectedWords = shuffled.slice(0, Math.min(count, currentVocabList.length));
+        updateSelectedWords();
+    }
+
+    // 清空已选词汇
+    function clearSelectedWords() {
+        selectedWords = [];
+        updateSelectedWords();
+    }
+
+    // 移除单个词汇
+    function removeWord(word) {
+        selectedWords = selectedWords.filter(w => w !== word);
+        updateSelectedWords();
+    }
+
+    // 更新已选词汇显示
+    function updateSelectedWords() {
+        const container = document.getElementById('selectedWords');
+        document.getElementById('selectedCount').textContent = selectedWords.length;
+        
+        if (selectedWords.length === 0) {
+            container.innerHTML = '<p class="text-gray-400 text-sm">点击上方按钮随机选词</p>';
+        } else {
+            container.innerHTML = selectedWords.map(w => 
+                `<span class="word-tag selected px-3 py-1 rounded-full text-sm cursor-pointer" onclick="removeWord('${w}')">${w} ×</span>`
+            ).join('');
+        }
+    }
+
+    function onProviderChange() {
+        const p = document.getElementById('providerSelect').value;
+        const c = PROVIDERS[p];
+        document.getElementById('apiUrl').value = c.url;
+        document.getElementById('apiUrl').disabled = p !== 'custom';
+        document.getElementById('modelSelect').innerHTML = c.models.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+    }
+
+    // 切换 API 配置面板
+    function toggleApiConfig() {
+        const panel = document.getElementById('apiConfigPanel');
+        const icon = document.getElementById('apiToggleIcon');
+        panel.classList.toggle('hidden');
+        icon.style.transform = panel.classList.contains('hidden') ? '' : 'rotate(180deg)';
+    }
+
+    // 更新 API 状态显示
+    function updateApiStatus() {
+        const apiKey = document.getElementById('apiKey').value;
+        const status = document.getElementById('apiStatus');
+        if (apiKey) {
+            status.textContent = '已配置';
+            status.className = 'text-xs px-2 py-0.5 bg-green-600/50 rounded-full';
+        } else {
+            status.textContent = '未配置';
+            status.className = 'text-xs px-2 py-0.5 bg-yellow-600/50 rounded-full';
+        }
+    }
+
+    function toggleCustomPrompt() {
+        document.getElementById('customPromptArea').classList.toggle('hidden');
+    }
+
+    async function generateArticle() {
+        if (selectedWords.length === 0) {
+            alert('请先点击"AI 随机选词"按钮选择词汇！');
+            return;
+        }
+        
+        const apiKey = document.getElementById('apiKey').value;
+        if (!apiKey) {
+            alert('请输入 API Key！');
+            return;
+        }
+        
+        const btn = document.getElementById('generateBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="typing">正在生成中...</span>';
+        
+        try {
+            const url = document.getElementById('apiUrl').value;
+            const model = document.getElementById('modelSelect').value;
+            const tpl = document.getElementById('promptTemplate').value;
+            const customPrompt = document.getElementById('customPrompt').value;
+            const articleType = document.getElementById('articleType').value;
+            const wordCountVal = document.getElementById('wordCount').value;
+            
+            const typeMap = {
+                story: 'narrative story',
+                news: 'news article',
+                essay: 'argumentative essay',
+                dialog: 'dialogue',
+                letter: 'letter or email',
+                random: 'piece of writing (you choose the style)'
+            };
+            
+            const countMap = { '100': '100', '200': '200', '300': '300', '500': '500', random: '150-300' };
+            
+            let prompt = customPrompt || PROMPT_TEMPLATES[tpl];
+            prompt = prompt
+                .replace('{words}', selectedWords.join(', '))
+                .replace('{type}', typeMap[articleType] || articleType)
+                .replace('{count}', countMap[wordCountVal] || wordCountVal);
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: model,
+                    messages: [{ role: 'user', content: prompt }],
+                    temperature: 0.7
+                })
+            });
+            
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`API错误: ${response.status} - ${errText}`);
+            }
+            
+            const data = await response.json();
+            currentArticle = data.choices?.[0]?.message?.content || '生成失败';
+            
+            // 高亮目标词汇
+            let displayContent = currentArticle;
+            selectedWords.forEach(word => {
+                const regex = new RegExp(`\\b(${word})\\b`, 'gi');
+                displayContent = displayContent.replace(regex, '<span class="highlight-word">$1</span>');
+            });
+            
+            document.getElementById('articleResult').innerHTML = displayContent;
+            document.getElementById('usedWordsList').innerHTML = selectedWords.map(w => 
+                `<span class="px-3 py-1 bg-gradient-to-r from-violet-600/50 to-pink-600/50 rounded-full text-sm">${w}</span>`
+            ).join('');
+            document.getElementById('resultSection').classList.remove('hidden');
+            
+        } catch (error) {
+            alert('生成失败: ' + error.message);
+            console.error(error);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<span>🚀</span> 生成短文';
+        }
+    }
+
+    function saveToCollection() {
+        if (!currentArticle) return;
+        
+        collections.unshift({
+            id: Date.now(),
+            date: new Date().toLocaleDateString('zh-CN'),
+            words: [...selectedWords],
+            article: currentArticle,
+            type: document.getElementById('articleType').value
+        });
+        
+        localStorage.setItem('ai_reader_collections', JSON.stringify(collections));
+        renderCollections();
+        alert('已保存到收藏！');
+    }
+
+    function downloadArticle() {
+        if (!currentArticle) return;
+        
+        const content = `AI English Reading\n${'='.repeat(50)}\nDate: ${new Date().toLocaleString()}\nWords: ${selectedWords.join(', ')}\n${'='.repeat(50)}\n\n${currentArticle}`;
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ai-reading-${Date.now()}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function renderCollections() {
+        const container = document.getElementById('collectionList');
+        
+        if (!collections.length) {
+            container.innerHTML = '<p class="text-gray-400 text-sm text-center py-8">暂无收藏内容</p>';
+            return;
+        }
+        
+        container.innerHTML = collections.map(item => `
+            <div class="collection-card p-4 bg-white/5 rounded-xl border border-white/10 cursor-pointer" onclick="viewCollection(${item.id})">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-sm text-gray-400">${item.date}</p>
+                        <p class="text-gray-200 mt-1 line-clamp-2">${item.article.substring(0, 100)}...</p>
+                        <div class="flex gap-1 mt-2 flex-wrap">
+                            ${item.words.slice(0, 3).map(w => `<span class="text-xs px-2 py-0.5 bg-violet-600/30 rounded">${w}</span>`).join('')}
+                            ${item.words.length > 3 ? `<span class="text-xs text-gray-400">+${item.words.length - 3}</span>` : ''}
+                        </div>
+                    </div>
+                    <button onclick="event.stopPropagation(); deleteCollection(${item.id})" class="text-red-400 hover:text-red-300 text-sm">删除</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function viewCollection(id) {
+        const item = collections.find(c => c.id === id);
+        if (!item) return;
+        
+        selectedWords = [...item.words];
+        currentArticle = item.article;
+        updateSelectedWords();
+        
+        let displayContent = item.article;
+        item.words.forEach(word => {
+            const regex = new RegExp(`\\b(${word})\\b`, 'gi');
+            displayContent = displayContent.replace(regex, '<span class="highlight-word">$1</span>');
+        });
+        
+        document.getElementById('articleResult').innerHTML = displayContent;
+        document.getElementById('usedWordsList').innerHTML = item.words.map(w => 
+            `<span class="px-3 py-1 bg-gradient-to-r from-violet-600/50 to-pink-600/50 rounded-full text-sm">${w}</span>`
+        ).join('');
+        document.getElementById('resultSection').classList.remove('hidden');
+        
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function deleteCollection(id) {
+        if (!confirm('确定删除？')) return;
+        collections = collections.filter(c => c.id !== id);
+        localStorage.setItem('ai_reader_collections', JSON.stringify(collections));
+        renderCollections();
+    }
+
+    function clearAllCollections() {
+        if (!confirm('确定清空所有收藏？')) return;
+        collections = [];
+        localStorage.setItem('ai_reader_collections', JSON.stringify(collections));
+        renderCollections();
+    }
+
+    function showDevModal() { document.getElementById('devModal').classList.remove('hidden'); }
+    function hideDevModal() { document.getElementById('devModal').classList.add('hidden'); }
+    </script>
+</body>
+</html>
